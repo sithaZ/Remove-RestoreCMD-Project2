@@ -1,0 +1,32 @@
+#!/bin/bash
+LOG_FILE="/tmp/trash/trash.log"
+if [ ! -s "$LOG_FILE" ]; then
+  echo "Trash log is empty. Nothing to restore."
+  exit 1
+fi
+LATEST_ENTRY=$(cat "$LOG_FILE" | fzf --height 40% --reverse)
+if [ -z "$LATEST_ENTRY" ]; then
+  echo "No item selected."
+  exit 0
+fi
+ORIGINAL_PATH=$(echo "$LATEST_ENTRY" | jq -r '.originalPath')
+TRASH_PATH=$(echo "$LATEST_ENTRY" | jq -r '.trashPath')
+if [ "$ORIGINAL_PATH" = "null" ] || [ "$TRASH_PATH" = "null" ]; then
+    echo "Error: Could not parse selected log entry." >&2
+    exit 1
+fi
+if [ ! -e "$TRASH_PATH" ]; then
+  echo "Error: Trashed file '$TRASH_PATH' no longer exists." >&2
+  exit 1
+fi
+if [ -e "$ORIGINAL_PATH" ]; then
+  echo "Error: Conflict! A file already exists at '$ORIGINAL_PATH'." >&2
+  exit 1
+fi
+DESTINATION_DIR=$(dirname "$ORIGINAL_PATH")
+mkdir -p "$DESTINATION_DIR"
+if mv "$TRASH_PATH" "$ORIGINAL_PATH"; then
+  echo "✅ Successfully restored '$TRASH_PATH' to '$ORIGINAL_PATH'."
+else
+  echo "Error: Failed to restore file." >&2
+fi

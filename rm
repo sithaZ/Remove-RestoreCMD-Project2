@@ -1,0 +1,42 @@
+#!/bin/bash
+TRASH_DIR="/tmp/trash"
+LOG_FILE="/tmp/trash/trash.log"
+recursive=false
+files=()
+for arg in "$@"; do
+  case "$arg" in
+    -r) recursive=true ;;
+    -*) echo "Error: Unsupported flag '$arg'." >&2; exit 1 ;;
+    *) files+=("$arg") ;;
+  esac
+done
+if [ ${#files[@]} -eq 0 ]; then
+    echo "Usage: $0 [-r] <file...>" >&2
+    exit 1
+fi
+for item in "${files[@]}"; do
+  if [ ! -e "$item" ]; then
+    echo "Error: File '$item' not found." >&2
+    continue
+  fi
+  if [ -d "$item" ] && [ "$recursive" = false ]; then
+    echo "Error: Cannot remove directory '$item' without '-r'." >&2
+    continue
+  fi
+  TIMESTAMP=$(date +%s)
+  BASENAME=$(basename "$item")
+  TRASH_PATH="$TRASH_DIR/${BASENAME}_${TIMESTAMP}"
+  if mv "$item" "$TRASH_PATH"; then
+    ORIGINAL_PATH=$(realpath "$item")
+    LOG_TIMESTAMP=$(date +"%Y-%m-%d %H:%M:%S")
+    # THE FIX IS HERE: Added the "-c" flag for compact, single-line output
+    jq -n -c \
+      --arg op "$ORIGINAL_PATH" \
+      --arg tp "$TRASH_PATH" \
+      --arg ts "$LOG_TIMESTAMP" \
+      '{originalPath: $op, trashPath: $tp, deletedTimestamp: $ts}' >> "$LOG_FILE"
+    echo "Moved '$item' to trash."
+  else
+    echo "Error: Failed to move '$item' to trash." >&2
+  fi
+done
